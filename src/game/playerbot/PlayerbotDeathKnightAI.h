@@ -89,8 +89,9 @@ public:
     virtual ~PlayerbotDeathKnightAI();
 
     // all combat actions go here
-    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
-    CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
+    bool Pull();
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
@@ -98,7 +99,14 @@ public:
     // buff a specific player, usually a real PC who is not in group
     //void BuffPlayer(Player *target);
 
+    // Utility Functions
+    bool CanPull();
+
 private:
+    CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoFirstCombatManeuverPVP(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
 
     // Unholy
     uint32 BONE_SHIELD,
@@ -152,9 +160,6 @@ private:
            HYSTERIA,
            DANCING_WEAPON,
            DARK_COMMAND;
-
-    // first aid
-    uint32 RECENTLY_BANDAGED;
 
     // racial
     uint32 ARCANE_TORRENT,

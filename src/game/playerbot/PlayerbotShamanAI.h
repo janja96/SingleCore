@@ -137,16 +137,24 @@ public:
     virtual ~PlayerbotShamanAI();
 
     // all combat actions go here
-    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
-    CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
 
+    // Utility Functions
+    bool CastHoTOnTank();
+
 private:
+    CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoFirstCombatManeuverPVP(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
+
     // Heals the target based off its hps
-    CombatManeuverReturns HealTarget(Unit* target);
-    Unit* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
+    CombatManeuverReturns HealPlayer(Player* target);
+    Player* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
     void DropTotems();
     void CheckShields();
     void UseCooldowns();
@@ -213,9 +221,6 @@ private:
            HEX,
            ELEMENTAL_MASTERY,
            THUNDERSTORM;
-
-    // first aid
-    uint32 RECENTLY_BANDAGED;
 
     // racial
     uint32 ARCANE_TORRENT,

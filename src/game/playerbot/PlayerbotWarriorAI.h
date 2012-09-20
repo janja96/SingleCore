@@ -33,6 +33,7 @@ enum
 
 enum WarriorSpells
 {
+    AUTO_SHOT_2                     = 75,
     BATTLE_SHOUT_1                  = 6673,
     BATTLE_STANCE_1                 = 2457,
     BERSERKER_RAGE_1                = 18499,
@@ -101,8 +102,9 @@ public:
     virtual ~PlayerbotWarriorAI();
 
     // all combat actions go here
-    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
-    CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
+    bool Pull();
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
@@ -110,7 +112,15 @@ public:
     //Buff/rebuff shouts
     void CheckShouts();
 
+    // Utility Functions
+    bool CanPull();
+
 private:
+    CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoFirstCombatManeuverPVP(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
+
     // ARMS
     uint32 BATTLE_STANCE,
            CHARGE,
@@ -171,9 +181,6 @@ private:
            SLAM_PROC,
            BLOODSURGE;
 
-    // first aid
-    uint32 RECENTLY_BANDAGED;
-
     // racial
     uint32 ARCANE_TORRENT,
            GIFT_OF_THE_NAARU,
@@ -185,6 +192,9 @@ private:
            WAR_STOMP,
            BERSERKING,
            WILL_OF_THE_FORSAKEN;
+
+    // general
+    uint32 AUTO_SHOT;
 
     uint32 SpellSequence;
 };

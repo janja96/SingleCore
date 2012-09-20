@@ -83,7 +83,7 @@ enum MageSpells
     REMOVE_CURSE_MAGE_1             = 475,
     RITUAL_OF_REFRESHMENT_1         = 43987,
     SCORCH_1                        = 2948,
-    SHOOT_2                                          = 5019,
+    SHOOT_2                         = 5019,
     SLOW_1                          = 31589,
     SLOW_FALL_1                     = 130,
     SPELLSTEAL_1                    = 30449,
@@ -98,17 +98,21 @@ public:
     virtual ~PlayerbotMageAI();
 
     // all combat actions go here
-    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
-    CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
 
-    // buff a specific player, usually a real PC who is not in group
-    bool BuffPlayer(Player *target);
-
 private:
+    CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoFirstCombatManeuverPVP(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
+
     CombatManeuverReturns CastSpell(uint32 nextAction, Unit *pTarget = NULL) { return CastSpellWand(nextAction, pTarget, SHOOT); }
+
+    static bool BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *target);
 
     // ARCANE
     uint32 ARCANE_MISSILES,
@@ -161,9 +165,6 @@ private:
            MANA_SHIELD,
            DAMPEN_MAGIC,
            AMPLIFY_MAGIC;
-
-    // first aid
-    uint32 RECENTLY_BANDAGED;
 
     // racial
     uint32 ARCANE_TORRENT,

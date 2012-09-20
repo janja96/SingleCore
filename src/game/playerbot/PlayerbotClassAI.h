@@ -34,13 +34,22 @@
 class Player;
 class PlayerbotAI;
 
+enum JOB_TYPE
+{
+    JOB_HEAL     = 0x01,
+    JOB_TANK     = 0x02,
+    JOB_MASTER   = 0x04, // Not a fan of this distinction but user (or rather, admin) choice
+    JOB_DPS      = 0x08,
+    JOB_ALL      = 0x0F, // all of the above
+    JOB_MANAONLY = 0x10  // for buff checking (NOTE: this means any with powertype mana AND druids (who may be shifted but still have mana)
+};
+
 struct heal_priority
 {
     Player* p;
     uint8 hp;
-    uint8 type;
-    heal_priority(Player* pin, uint8 hpin) : p(pin), hp(hpin), type(0) {}
-    heal_priority(Player* pin, uint8 hpin, uint8 t) : p(pin), hp(hpin), type(t) {}
+    JOB_TYPE type;
+    heal_priority(Player* pin, uint8 hpin, JOB_TYPE t) : p(pin), hp(hpin), type(t) {}
     // overriding the operator like this is not recommended for general use - however we won't use this struct for anything else
     bool operator<(const heal_priority& a) const { return type < a.type; }
 };
@@ -54,23 +63,36 @@ public:
     // all combat actions go here
     virtual CombatManeuverReturns DoFirstCombatManeuver(Unit*);
     virtual CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    bool Pull() { DEBUG_LOG("[PlayerbotAI]: Warning: Using PlayerbotClassAI::Pull() rather than class specific function"); return false; }
 
     // all non combat actions go here, ex buffs, heals, rezzes
     virtual void DoNonCombatActions();
-
-    // buff a specific player, usually a real PC who is not in group
-    virtual bool BuffPlayer(Player* target);
+    bool EatDrinkBandage(bool bMana = true, unsigned char foodPercent = 50, unsigned char drinkPercent = 50, unsigned char bandagePercent = 70);
 
     // Utilities
     Player* GetMaster() { return m_master; }
     Player* GetPlayerBot() { return m_bot; }
-    PlayerbotAI* GetAI() { return m_ai; };
+    PlayerbotAI* GetAI() { return m_ai; }
+    bool CanPull();
+    bool CastHoTOnTank();
+    time_t GetWaitUntil() { return m_WaitUntil; }
+    void SetWait(uint8 t) { m_WaitUntil = m_ai->CurrentTime() + t; }
+    void ClearWait() { m_WaitUntil = 0; }
+    //void SetWaitUntil(time_t t) { m_WaitUntil = t; }
 
 protected:
+    virtual CombatManeuverReturns DoFirstCombatManeuverPVE(Unit*);
+    virtual CombatManeuverReturns DoNextCombatManeuverPVE(Unit*);
+    virtual CombatManeuverReturns DoFirstCombatManeuverPVP(Unit*);
+    virtual CombatManeuverReturns DoNextCombatManeuverPVP(Unit*);
+
     CombatManeuverReturns CastSpellNoRanged(uint32 nextAction, Unit *pTarget);
     CombatManeuverReturns CastSpellWand(uint32 nextAction, Unit *pTarget, uint32 SHOOT);
-    virtual CombatManeuverReturns HealTarget(Unit* /*target*/) { return RETURN_NO_ACTION_UNKNOWN; }
-    virtual Unit* GetHealTarget();
+    virtual CombatManeuverReturns HealPlayer(Player* target);
+    CombatManeuverReturns Buff(bool (*BuffHelper)(PlayerbotAI*, uint32, Unit*), uint32 spellId, uint32 type = JOB_ALL, bool bMustBeOOC = true);
+    Player* GetHealTarget(JOB_TYPE type = JOB_ALL);
+    Player* GetResurrectionTarget(JOB_TYPE type = JOB_ALL, bool bMustBeOOC = true);
+    JOB_TYPE GetTargetJob(Player* target);
 
     // These values are used in GetHealTarget and can be overridden per class (to accomodate healing spell health checks)
     uint8 m_MinHealthPercentTank;
@@ -78,9 +100,14 @@ protected:
     uint8 m_MinHealthPercentDPS;
     uint8 m_MinHealthPercentMaster;
 
+    time_t m_WaitUntil;
+
     Player* m_master;
     Player* m_bot;
     PlayerbotAI* m_ai;
+
+    // first aid
+    uint32 RECENTLY_BANDAGED;
 };
 
 #endif

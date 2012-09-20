@@ -1,0 +1,1 @@
+#define REVISION_DB_PLAYERBOTAI "required_6_playerbotai_combatorders"

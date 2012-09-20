@@ -31,17 +31,125 @@ PlayerbotClassAI::PlayerbotClassAI(Player* const master, Player* const bot, Play
     m_MinHealthPercentHealer = 60;
     m_MinHealthPercentDPS    = 30;
     m_MinHealthPercentMaster = m_MinHealthPercentDPS;
+
+    ClearWait();
 }
 PlayerbotClassAI::~PlayerbotClassAI() {}
 
 CombatManeuverReturns PlayerbotClassAI::DoFirstCombatManeuver(Unit *) { return RETURN_NO_ACTION_OK; }
 CombatManeuverReturns PlayerbotClassAI::DoNextCombatManeuver(Unit *) { return RETURN_NO_ACTION_OK; }
 
-void PlayerbotClassAI::DoNonCombatActions() {}
+CombatManeuverReturns PlayerbotClassAI::DoFirstCombatManeuverPVE(Unit *) { return RETURN_NO_ACTION_OK; }
+CombatManeuverReturns PlayerbotClassAI::DoNextCombatManeuverPVE(Unit *) { return RETURN_NO_ACTION_OK; }
+CombatManeuverReturns PlayerbotClassAI::DoFirstCombatManeuverPVP(Unit *) { return RETURN_NO_ACTION_OK; }
+CombatManeuverReturns PlayerbotClassAI::DoNextCombatManeuverPVP(Unit *) { return RETURN_NO_ACTION_OK; }
 
-bool PlayerbotClassAI::BuffPlayer(Player* /*target*/)
+void PlayerbotClassAI::DoNonCombatActions()
 {
+    DEBUG_LOG("[PlayerbotAI]: Warning: Using PlayerbotClassAI::DoNonCombatActions() rather than class specific function");
+}
+
+bool PlayerbotClassAI::EatDrinkBandage(bool bMana, unsigned char foodPercent, unsigned char drinkPercent, unsigned char bandagePercent)
+{
+    Item* drinkItem = NULL;
+    Item* foodItem = NULL;
+    if (bMana && m_ai->GetManaPercent() < drinkPercent)
+        drinkItem = m_ai->FindDrink();
+    if (m_ai->GetHealthPercent() < foodPercent)
+        foodItem = m_ai->FindFood();
+    if (drinkItem || foodItem)
+    {
+        if (drinkItem)
+        {
+            m_ai->TellMaster("I could use a drink.");
+            m_ai->UseItem(drinkItem);
+        }
+        if (foodItem)
+        {
+            m_ai->TellMaster("I could use some food.");
+            m_ai->UseItem(foodItem);
+        }
+        // and now wait until drinks are finished and/or combat begins
+        m_ai->SetCombatOrder(PlayerbotAI::ORDERS_TEMP_WAIT_OOC);
+        SetWait(25); // seconds
+        return true;
+    }
+
+    if (m_ai->GetHealthPercent() < bandagePercent && !m_bot->HasAura(RECENTLY_BANDAGED))
+    {
+        Item* bandageItem = m_ai->FindBandage();
+        if (bandageItem)
+        {
+            m_ai->TellMaster("I could use first aid.");
+            m_ai->UseItem(bandageItem);
+            return true;
+        }
+    }
+
     return false;
+}
+
+bool PlayerbotClassAI::CanPull()
+{
+    DEBUG_LOG("[PlayerbotAI]: Warning: Using PlayerbotClassAI::CanPull() rather than class specific function");
+    return false;
+}
+
+bool PlayerbotClassAI::CastHoTOnTank()
+{
+    DEBUG_LOG("[PlayerbotAI]: Warning: Using PlayerbotClassAI::CastHoTOnTank() rather than class specific function");
+    return false;
+}
+
+CombatManeuverReturns PlayerbotClassAI::HealPlayer(Player* target) {
+    if (!m_ai)  return RETURN_NO_ACTION_ERROR;
+    if (!m_bot) return RETURN_NO_ACTION_ERROR;
+
+    if (!target) return RETURN_NO_ACTION_INVALIDTARGET;
+    if (target->IsInDuel()) return RETURN_NO_ACTION_INVALIDTARGET;
+
+    return RETURN_NO_ACTION_OK;
+}
+
+// Please note that job_type JOB_MANAONLY is a cumulative restriction. JOB_TANK | JOB_HEAL means both; JOB_TANK | JOB_MANAONLY means tanks with powertype MANA (paladins, druids)
+CombatManeuverReturns PlayerbotClassAI::Buff(bool (*BuffHelper)(PlayerbotAI*, uint32, Unit*), uint32 spellId, uint32 type, bool bMustBeOOC)
+{
+    if (!m_ai)  return RETURN_NO_ACTION_ERROR;
+    if (!m_bot) return RETURN_NO_ACTION_ERROR;
+    if (!m_bot->isAlive() || m_bot->IsInDuel()) return RETURN_NO_ACTION_ERROR;
+    if (bMustBeOOC && m_bot->isInCombat()) return RETURN_NO_ACTION_ERROR;
+
+    if (spellId == 0) return RETURN_NO_ACTION_OK;
+
+    // First, fill the list of targets
+    if (m_bot->GetGroup())
+    {
+        Group::MemberSlotList const& groupSlot = m_bot->GetGroup()->GetMemberSlots();
+        for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
+        {
+            Player *groupMember = sObjectMgr.GetPlayer(itr->guid);
+            if (!groupMember || !groupMember->isAlive() || groupMember->IsInDuel())
+                continue;
+            JOB_TYPE job = GetTargetJob(groupMember);
+            if (job & type && (!(job & JOB_MANAONLY) || groupMember->getClass() == CLASS_DRUID || groupMember->getPowerType() == POWER_MANA))
+            {
+                if (BuffHelper(m_ai, spellId, groupMember))
+                    return RETURN_CONTINUE;
+            }
+        }
+    }
+    else
+    {
+        if (m_master && !m_master->IsInDuel()
+            && (!(GetTargetJob(m_master) & JOB_MANAONLY) || m_master->getClass() == CLASS_DRUID || m_master->getPowerType() == POWER_MANA))
+            if (BuffHelper(m_ai, spellId, m_master))
+                return RETURN_CONTINUE;
+        // Do not check job or power type - any buff you have is always useful to self
+        if (BuffHelper(m_ai, spellId, m_bot))
+            return RETURN_CONTINUE;
+    }
+
+    return RETURN_NO_ACTION_OK;
 }
 
 /**
@@ -55,109 +163,37 @@ bool PlayerbotClassAI::BuffPlayer(Player* /*target*/)
  * Will need extensive re-write for co-operation amongst multiple healers. As it stands, multiple healers would all pick the same 'ideal'
  * healing target.
  */
-Unit* PlayerbotClassAI::GetHealTarget()
+Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
 {
     if (!m_ai)  return NULL;
     if (!m_bot) return NULL;
     if (!m_bot->isAlive() || m_bot->IsInDuel()) return NULL;
 
-    // define seperately for sorting purposes
-    enum
-    {
-        TYPE_HEAL = 1,
-        TYPE_TANK,
-        TYPE_MASTER,
-        TYPE_DPS
-    };
-
+    // define seperately for sorting purposes - DO NOT CHANGE ORDER!
     std::vector<heal_priority> targets;
 
     // First, fill the list of targets
     if (m_bot->GetGroup())
     {
-        // TODO: does this include the bot itself? If not, uncomment next line, if so, remove both comments
-        //targets.push_back( heal_priority(m_bot, m_bot->GetHealthPercent()) );
         Group::MemberSlotList const& groupSlot = m_bot->GetGroup()->GetMemberSlots();
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
             Player *groupMember = sObjectMgr.GetPlayer(itr->guid);
             if (!groupMember || !groupMember->isAlive() || groupMember->IsInDuel())
                 continue;
-            targets.push_back( heal_priority(groupMember, (groupMember->GetHealth() * 100 / groupMember->GetMaxHealth())) );
+            JOB_TYPE job = GetTargetJob(groupMember);
+            if (job & type)
+                targets.push_back( heal_priority(groupMember, (groupMember->GetHealth() * 100 / groupMember->GetMaxHealth()), job) );
         }
     }
     else
     {
-        targets.push_back( heal_priority(m_bot, m_bot->GetHealthPercent()) );
+        targets.push_back( heal_priority(m_bot, m_bot->GetHealthPercent(), GetTargetJob(m_bot)) );
         if (m_master && !m_master->IsInDuel())
-            targets.push_back( heal_priority(m_master, (m_master->GetHealth() * 100 / m_master->GetMaxHealth())) );
+            targets.push_back( heal_priority(m_master, (m_master->GetHealth() * 100 / m_master->GetMaxHealth()), GetTargetJob(m_master)) );
     }
 
-    // We have a list of all valid targets, fill in type (heal, tank, dps, master)
-    for (uint8 i = 0; i < targets.size(); i++)
-    {
-        // is a bot
-        if (targets.at(i).p->GetPlayerbotAI())
-        {
-            if (targets.at(i).p->GetPlayerbotAI()->IsHealer())
-                targets.at(i).type = TYPE_HEAL;
-            else if (targets.at(i).p->GetPlayerbotAI()->IsTank())
-                targets.at(i).type = TYPE_TANK;
-            else
-                targets.at(i).type = TYPE_DPS;
-        }
-        else // not a bot
-        {
-            // TODO: figure out what to do with human players - i.e. figure out if they're tank, DPS or healer
-            uint8 uSpec = targets.at(i).p->GetSpec();
-            // Keep in mind if the player IS healer, safe to assume he's bound to heal himself as well
-            switch (targets.at(i).p->getClass())
-            {
-                case CLASS_PALADIN:
-                    if (uSpec == PALADIN_SPEC_HOLY)
-                        targets.at(i).type = TYPE_HEAL;
-                    else if (uSpec == PALADIN_SPEC_PROTECTION)
-                        targets.at(i).type = TYPE_TANK;
-                    else
-                        targets.at(i).type = TYPE_DPS;
-                    break;
-                case CLASS_DRUID:
-                    if (uSpec == DRUID_SPEC_RESTORATION)
-                        targets.at(i).type = TYPE_HEAL;
-                    // Feral can be used for both Tank or DPS... play it safe and assume tank. If not... he best be good at threat management
-                    else if (uSpec == DRUID_SPEC_FERAL)
-                        targets.at(i).type = TYPE_TANK;
-                    else
-                        targets.at(i).type = TYPE_DPS;
-                    break;
-                case CLASS_PRIEST:
-                    // Since Discipline can be used for both healer or DPS assume DPS
-                    targets.at(i).type = (uSpec == PRIEST_SPEC_HOLY) ? TYPE_HEAL : TYPE_DPS;
-                    break;
-                case CLASS_SHAMAN:
-                    targets.at(i).type = (uSpec == SHAMAN_SPEC_RESTORATION) ? TYPE_HEAL : TYPE_DPS;
-                    break;
-                case CLASS_WARRIOR:
-                    targets.at(i).type = (uSpec == WARRIOR_SPEC_PROTECTION) ? TYPE_TANK : TYPE_DPS;
-                    break;
-                case CLASS_DEATH_KNIGHT:
-                    targets.at(i).type = (uSpec == DEATHKNIGHT_SPEC_FROST) ? TYPE_TANK : TYPE_DPS;
-                    break;
-                case CLASS_MAGE:
-                case CLASS_WARLOCK:
-                case CLASS_ROGUE:
-                case CLASS_HUNTER:
-                default:
-                    targets.at(i).type = TYPE_DPS;
-            }
-
-            // override only when a lower priority is present
-            if (m_master == targets.at(i).p && targets.at(i).type > TYPE_MASTER)
-                targets.at(i).type = TYPE_MASTER;
-        }
-    }
-
-    // Now we have all the data required and can start to sort
+    // Sorts according to type: Healers first, tanks next, then master followed by DPS, thanks to the order of the TYPE enum
     std::sort(targets.begin(), targets.end());
 
     uint8 uCount = 0;
@@ -167,10 +203,12 @@ Unit* PlayerbotClassAI::GetHealTarget()
     // Try to find a healer in need of healing (if multiple, the lowest health one)
     while (true)
     {
-        if (uCount >= targets.size() || targets.at(uCount).type != TYPE_HEAL) break;
+        // This works because we sorted it above
+        if ( (uCount + i) >= targets.size() || targets.at(uCount).type != JOB_HEAL) break;
         uCount++;
     }
 
+    // We have uCount healers in the targets, check if any qualify for priority healing
     for (; uCount > 0; uCount--, i++)
     {
         if (targets.at(i).hp <= m_MinHealthPercentHealer)
@@ -182,7 +220,7 @@ Unit* PlayerbotClassAI::GetHealTarget()
     // Try to find a tank in need of healing (if multiple, the lowest health one)
     while (true)
     {
-        if (uCount >= targets.size() || targets.at(uCount).type != TYPE_TANK) break;
+        if ( (uCount + i) >= targets.size() || targets.at(uCount).type != JOB_TANK) break;
         uCount++;
     }
 
@@ -199,7 +237,7 @@ Unit* PlayerbotClassAI::GetHealTarget()
     {
         while (true)
         {
-            if (uCount >= targets.size() || targets.at(uCount).type != TYPE_MASTER) break;
+            if ( (uCount + i) >= targets.size() || targets.at(uCount).type != JOB_MASTER) break;
             uCount++;
         }
 
@@ -215,8 +253,7 @@ Unit* PlayerbotClassAI::GetHealTarget()
     // Try to find anyone else in need of healing (lowest health one first)
     while (true)
     {
-        if (uCount >= targets.size() || targets.at(uCount).type != TYPE_DPS) break;
-        if (m_MinHealthPercentMaster == m_MinHealthPercentDPS && targets.at(uCount).type == TYPE_MASTER) break;
+        if ( (uCount + i) >= targets.size() ) break;
         uCount++;
     }
 
@@ -228,7 +265,107 @@ Unit* PlayerbotClassAI::GetHealTarget()
     }
     if (x > -1) return targets.at(x).p;
 
+    // Nobody is critical, find anyone hurt at all, return lowest (let the healer sort out if it's worth healing or not)
+    for (i = 0, uCount = targets.size(); uCount > 0; uCount--, i++)
+    {
+        if (targets.at(i).hp < 100)
+            if (x == -1 || targets.at(x).hp > targets.at(i).hp)
+                x = i;
+    }
+    if (x > -1) return targets.at(x).p;
+
     return NULL;
+}
+
+Player* PlayerbotClassAI::GetResurrectionTarget(JOB_TYPE type, bool bMustBeOOC)
+{
+    if (!m_ai)  return NULL;
+    if (!m_bot) return NULL;
+    if (!m_bot->isAlive() || m_bot->IsInDuel()) return NULL;
+    if (bMustBeOOC && m_bot->isInCombat()) return NULL;
+
+    // First, fill the list of targets
+    if (m_bot->GetGroup())
+    {
+        // define seperately for sorting purposes - DO NOT CHANGE ORDER!
+        std::vector<heal_priority> targets;
+
+        Group::MemberSlotList const& groupSlot = m_bot->GetGroup()->GetMemberSlots();
+        for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
+        {
+            Player *groupMember = sObjectMgr.GetPlayer(itr->guid);
+            if (!groupMember || groupMember->isAlive())
+                continue;
+            JOB_TYPE job = GetTargetJob(groupMember);
+            if (job & type)
+                targets.push_back( heal_priority(groupMember, 0, job) );
+        }
+
+        // Sorts according to type: Healers first, tanks next, then master followed by DPS, thanks to the order of the TYPE enum
+        std::sort(targets.begin(), targets.end());
+
+        if (targets.size())
+            return targets.at(0).p;
+    }
+    else if (!m_master->isAlive())
+        return m_master;
+
+    return NULL;
+}
+
+JOB_TYPE PlayerbotClassAI::GetTargetJob(Player* target)
+{
+    // is a bot
+    if (target->GetPlayerbotAI())
+    {
+        if (target->GetPlayerbotAI()->IsHealer())
+            return JOB_HEAL;
+        if (target->GetPlayerbotAI()->IsTank())
+            return JOB_TANK;
+        return JOB_DPS;
+    }
+
+    // figure out what to do with human players - i.e. figure out if they're tank, DPS or healer
+    uint8 uSpec = target->GetSpec();
+    switch (target->getClass())
+    {
+        case CLASS_PALADIN:
+            if (uSpec == PALADIN_SPEC_HOLY)
+                return JOB_HEAL;
+            if (uSpec == PALADIN_SPEC_PROTECTION)
+                return JOB_TANK;
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+        case CLASS_DRUID:
+            if (uSpec == DRUID_SPEC_RESTORATION)
+                return JOB_HEAL;
+            // Feral can be used for both Tank or DPS... play it safe and assume tank. If not... he best be good at threat management or he'll ravage the healer's mana
+            else if (uSpec == DRUID_SPEC_FERAL)
+                return JOB_TANK;
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+        case CLASS_PRIEST:
+            // Since Discipline can be used for both healer or DPS assume DPS
+            if (uSpec == PRIEST_SPEC_HOLY)
+                return JOB_HEAL;
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+        case CLASS_SHAMAN:
+            if (uSpec == SHAMAN_SPEC_RESTORATION)
+                return JOB_HEAL;
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+        case CLASS_WARRIOR:
+            if (uSpec == WARRIOR_SPEC_PROTECTION)
+                return JOB_TANK;
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+        case CLASS_DEATH_KNIGHT:
+            if (uSpec == DEATHKNIGHT_SPEC_FROST)
+                return JOB_TANK;
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+        case CLASS_MAGE:
+        case CLASS_WARLOCK:
+        case CLASS_ROGUE:
+        case CLASS_HUNTER:
+        default:
+            return (m_master == target) ? JOB_MASTER : JOB_DPS;
+    }
 }
 
 CombatManeuverReturns PlayerbotClassAI::CastSpellNoRanged(uint32 nextAction, Unit *pTarget)

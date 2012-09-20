@@ -107,27 +107,36 @@ public:
     virtual ~PlayerbotPaladinAI();
 
     // all combat actions go here
-    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
-    CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
+    bool Pull();
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
 
-    // buff a specific player, usually a real PC who is not in group
-    bool BuffPlayer(Player *target);
+    // Utility Functions
+    bool CanPull();
+    bool CastHoTOnTank();
 
 private:
-    // Heals the target based off its hps
-    CombatManeuverReturns HealTarget (Unit *target);
-    Unit* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
+    CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoFirstCombatManeuverPVP(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
 
-    // Bless target using greater blessing if possible
-    bool Bless(uint32 spellId, Unit *target);
+    // Heals the target based off its hps
+    CombatManeuverReturns HealPlayer(Player* target);
+    Player* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
+
     //Changes aura according to spec/orders
     void CheckAuras();
     //Changes Seal according to spec
     void CheckSeals();
 
+    static bool BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *target);
+
+    // make this public so the static function can access it. Either that or make an accessor function for each
+public:
     // Retribution
     uint32 RETRIBUTION_AURA,
            SEAL_OF_COMMAND,
@@ -197,9 +206,6 @@ private:
     // cannot be protected
     uint32 FORBEARANCE;
 
-    // first aid
-    uint32 RECENTLY_BANDAGED;
-
     // racial
     uint32 ARCANE_TORRENT,
            GIFT_OF_THE_NAARU,
@@ -215,6 +221,7 @@ private:
     //Non-Stacking buffs
     uint32 PRAYER_OF_SHADOW_PROTECTION;
 
+private:
     uint32 SpellSequence, CombatCounter, HealCounter;
 };
 

@@ -21,12 +21,15 @@ Commands:
 
 For a full list of commands, use '/t BOTNAME help' or various subcommands e.g. '/t BOTNAME help auction remove'.
 
+Note that these commands work both in whisper and in party chat (assuming the bot is in the party). Any command in party chat will be obeyed by all bots in the party (if applicable).
+
 /t BOTNAME attack (bot will attack selected target, similar to the way a pet can attack)
 /t BOTNAME follow (orders bot to follow player; will also revive bot if dead or teleport bot if far away)
 /t BOTNAME follow far (increases the bots follow distance from the player)
 /t BOTNAME follow near (decreases the bots follow distance from the player)
 /t BOTNAME follow reset (resets the bots follow distance to the config default setting. this commmand will be phased out)
 /t BOTNAME follow auto (turns off auto variable follow distance which is ON by default)
+/t BOTNAME follow info (Shows Automatic Follow Distance, toggle status ON or OFF)
 /t BOTNAME combat delay <0-10> (sets the amount of time the bot will wait before engaging your target in combat)
 /t BOTNAME stay
 /t BOTNAME assist (you'll need to be attacking something and the bot only does melee atm)
@@ -48,15 +51,16 @@ For a full list of commands, use '/t BOTNAME help' or various subcommands e.g. '
 /t BOTNAME process < disenchant | d > [ITEM LINK] (disenchants green [ITEM LINK] or better)
 /t BOTNAME process < mill | m > [ITEM LINK] (grinds 5 herbs [ITEM LINK] to produce pigments)
 /t BOTNAME process < prospect | p > [ITEM LINK] (searches 5 metal ore [ITEM LINK] for precious gems)
-/t BOTANME enchant (lists all enchantments [SPELLLINK] learnt by the bot)
-/t BOTANME enchant [SPELLLINK][ITEM LINK] (enchants selected tradable [ITEM LINK] either equipped or in bag)
+/t BOTNAME enchant (lists all enchantments [SPELLLINK] learnt by the bot)
+/t BOTNAME enchant [SPELLLINK][ITEM LINK] (enchants selected tradable [ITEM LINK] either equipped or in bag)
 /t BOTNAME use [ITEM LINK] (use item on self. If item hold quest, it will be accepted. If inventory item is lootable, it will be looted)
 /t BOTNAME use [ITEM LINK] TARGET (use item on selected unit)
 /t BOTNAME use [ITEM LINK][EQUIPPED ITEM LINK] (use item on equipped item)
-/t BOTNAME use [ITEM LINK][GAMEOBJECT LINK] (use item on gameobject )
+/t BOTNAME use [ITEM LINK][GAMEOBJECT LINK] (use item on gameobject)
 /t BOTNAME equip [ITEM LINK]
-/t BOTNAME autoequip (*toggle switch* bot(s) will auto equip items they receive based on usefulness. type .help for options)
-/t BOTNAME autoequip on/off/now (explicitly sets bot to ON/OFF and 'autoequip now' runs the process one time regardless of setting)
+/t BOTNAME equip auto (*toggle* auto equip acquired items based on usefulness)
+/t BOTNAME equip info (Show auto equip toggle status ON or OFF)
+/t BOTNAME equip auto <on | off | once> (explicitly turn auto equip ON or OFF, or run autoequip once after which it will turn off)
 /t BOTNAME reset (will reset states, orders and loot list)
 /t BOTNAME stats (bot shows available money, free inventory space and estimated item repair costs)
 /t BOTNAME survey (bot shows all available gameobjects, within a local perimeter around the bot)
@@ -86,7 +90,7 @@ For a full list of commands, use '/t BOTNAME help' or various subcommands e.g. '
 /t BOTNAME auction (bot will display all it's active owned auctions. Auction info will include an [AUCTION LINK] )
 /t BOTNAME auction add [ITEM LINK] (bot will add item to it's m_itemIds, for later auction)
 /t BOTNAME auction remove [AUCTION LINK] (bot will add auctionid to it's m_auctions, for later auction cancellation)
-/t BOTANME mail inbox [MAILBOX] (Lists all bot mail from selected [MAILBOX])
+/t BOTNAME mail inbox [MAILBOX] (Lists all bot mail from selected [MAILBOX])
 /t BOTNAME mail getcash [MAIL ID].. (gets all cash from selected [MAIL ID])
 /t BOTNAME mail getitem [MAIL ID].. (gets all items from selected [MAIL ID])
 /t BOTNAME mail delete [MAIL ID].. (delete all bot mail selected [MAIL ID])
@@ -269,11 +273,24 @@ define PLAYERBOT_CONF_VERSION    YYYYMMDDVV
 ConfVersion=YYYYMMDDVV
 * Of course don't forget to update your server's playerbot.conf.
 
-When updating the sql file(s), keep in mind the following locations:
-* sql/playerbotai
-Place your SQL files here.
-* src/shared/revision_sql.h
-#define REVISION_DB_PLAYERBOTAI "required_1_playerbotai_talentspecs"
+When updating the sql file(s), keep in mind the following:
+
+=== File Name Description in [sql/playerbotai] folder ===
+
+    FULL_playerbotai_characters_r2_update
+    |    |           |          |  |
+    |    |           |          |  Only if the sql updates a previous sql
+    |    |           |          |
+    |    |           |          Playerbot revision related to sql 
+    |    |           |
+    |    |           |Name of affected DB (default recommended name)
+    |    |
+    |    Playerbot sql file..drrr!
+    |
+    For clean install, just apply this sql
+
+* src/game/playerbot/revision_sql.h
+#define REVISION_DB_PLAYERBOTAI "required_6_playerbotai_combatorders"
 NOTE: This string should be an exact copy of your SQL file's second field name in the `playerbotai_db_version` table.
 
 BotGuy NPC Menu System

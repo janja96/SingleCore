@@ -23,14 +23,6 @@
 
 #include "PlayerbotClassAI.h"
 
-enum
-{
-    DruidCombat,
-    DruidTank,
-    DruidHeal,
-    DruidSpell
-};
-
 enum DruidSpells
 {
     ABOLISH_POISON_1                = 2893,
@@ -123,28 +115,36 @@ public:
     virtual ~PlayerbotDruidAI();
 
     // all combat actions go here
-    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
-    CombatManeuverReturns DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuver(Unit* pTarget);
+    bool Pull();
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
 
-    // buff a specific player, usually a real PC who is not in group
-    bool BuffPlayer(Player *target);
+    // Utility Functions
+    bool CanPull();
+    bool CastHoTOnTank();
 
 private:
+    CombatManeuverReturns DoFirstCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVE(Unit* pTarget);
+    CombatManeuverReturns DoFirstCombatManeuverPVP(Unit* pTarget);
+    CombatManeuverReturns DoNextCombatManeuverPVP(Unit* pTarget);
+
     CombatManeuverReturns CastSpell(uint32 nextAction, Unit *pTarget = NULL) { return CastSpellNoRanged(nextAction, pTarget); }
 
     // Combat Maneuver helper functions
     CombatManeuverReturns _DoNextPVECombatManeuverBear(Unit* pTarget);
     CombatManeuverReturns _DoNextPVECombatManeuverCat(Unit* pTarget);
     CombatManeuverReturns _DoNextPVECombatManeuverSpellDPS(Unit* pTarget);
-    CombatManeuverReturns _DoNextPVECombatManeuverHeal(Unit* pTarget);
+    CombatManeuverReturns _DoNextPVECombatManeuverHeal();
 
     // Heals the target based off its hps
-    CombatManeuverReturns HealTarget (Unit *target);
-    Unit* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
+    CombatManeuverReturns HealPlayer (Player* target);
+    Player* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
 
+    static bool BuffHelper(PlayerbotAI* ai, uint32 spellId, Unit *target);
     // Callback method to reset shapeshift forms blocking buffs and heals
     static void GoBuffForm(Player *self);
     // Has the ability to change to animal form
@@ -223,11 +223,9 @@ private:
            SWIFTMEND,
            TRANQUILITY,
            REVIVE,
+           REBIRTH,
            REMOVE_CURSE,
            ABOLISH_POISON;
-
-    // first aid
-    uint32 RECENTLY_BANDAGED;
 
     // racial
     uint32 ARCANE_TORRENT,

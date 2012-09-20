@@ -89,6 +89,46 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
 {
     switch (packet.GetOpcode())
     {
+        case CMSG_OFFER_PETITION:
+        {
+            WorldPacket p(packet);
+            p.rpos(0);    // reset reader
+            ObjectGuid petitionGuid;
+            ObjectGuid playerGuid;
+            uint32 junk;
+
+            p >> junk;                                      // this is not petition type!
+            p >> petitionGuid;                              // petition guid
+            p >> playerGuid;                                // player guid
+
+            Player* player = ObjectAccessor::FindPlayer(playerGuid);
+            if (!player)
+                return;
+
+            uint32 petitionLowGuid = petitionGuid.GetCounter();
+
+            QueryResult *result = CharacterDatabase.PQuery("SELECT * FROM petition_sign WHERE playerguid = '%u' AND petitionguid = '%u'", player->GetGUIDLow(), petitionLowGuid);
+
+            if(result)
+            {
+               ChatHandler(m_master).PSendSysMessage("%s has already signed the petition",player->GetName());
+               delete result;
+               return;
+            }
+
+            CharacterDatabase.PExecute("INSERT INTO petition_sign (ownerguid,petitionguid, playerguid, player_account) VALUES ('%u', '%u', '%u','%u')",
+            GetMaster()->GetGUIDLow(), petitionLowGuid, player->GetGUIDLow(), GetMaster()->GetSession()->GetAccountId());
+
+            p.Initialize(SMSG_PETITION_SIGN_RESULTS, (8+8+4));
+            p << ObjectGuid(petitionGuid);
+            p << ObjectGuid(playerGuid);
+            p << uint32(PETITION_SIGN_OK);
+
+            // close at signer side
+            GetMaster()->GetSession()->SendPacket(&p);
+
+            return;
+        }
 
         case CMSG_TOGGLE_PVP:
         {
@@ -293,7 +333,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                 Group* group = bot->GetGroup();
                 if (!group)
                     continue;
-                bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+
                 Unit *target = ObjectAccessor::GetUnit(*bot, guid);
 
                 bot->GetPlayerbotAI()->SetIgnoreUpdateTime(delay);
@@ -335,7 +375,6 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                 Player* const bot = it->second;
                 if (!bot)
                     return;
-                bot->GetPlayerbotAI()->FollowAutoReset(*bot);
                 Group* group = bot->GetGroup();
                 if (!group)
                     continue;
@@ -492,7 +531,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                 ChatHandler ch(m_master);
                 {
                 std::ostringstream out;
-                out << "time(0): " << time(0)
+                out << "CurrentTime: " << CurrentTime()
                 << " m_ignoreAIUpdatesUntilTime: " << pBot->m_ignoreAIUpdatesUntilTime;
                 ch.SendSysMessage(out.str().c_str());
                 }
@@ -548,18 +587,17 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                     Unit* thingToAttack = ObjectAccessor::GetUnit(*m_master, attackOnGuid);
                     if (!thingToAttack) return;
 
-                    Player *bot = 0;
+                    Player* bot = 0;
                     for (PlayerBotMap::iterator itr = m_playerBots.begin(); itr != m_playerBots.end(); ++itr)
                     {
                         bot = itr->second;
-                        if (!bot->IsFriendlyTo(thingToAttack) && !bot->IsWithinLOSInMap(thingToAttack))
+                        if (!bot->IsFriendlyTo(thingToAttack))
                         {
-                            bot->GetPlayerbotAI()->DoTeleport(*m_master);
+                            if (!bot->IsWithinLOSInMap(thingToAttack))
+                                bot->GetPlayerbotAI()->DoTeleport(*m_master);
                             if (bot->IsWithinLOSInMap(thingToAttack))
-                                bot->GetPlayerbotAI()->GetCombatTarget(thingToAttack);
+                                bot->GetPlayerbotAI()->Attack(thingToAttack);
                         }
-                        else if (!bot->IsFriendlyTo(thingToAttack) && bot->IsWithinLOSInMap(thingToAttack))
-                            bot->GetPlayerbotAI()->GetCombatTarget(thingToAttack);
                     }
                     return;
                 }
@@ -609,7 +647,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
             for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
             {
                 Player* const bot = it->second;
-                bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+                bot->GetPlayerbotAI()->FollowAutoReset();
                 GameObject *obj = m_master->GetMap()->GetGameObject(objGUID);
                 if (!obj)
                     return;
@@ -649,7 +687,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
             for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
             {
                 Player* const bot = it->second;
-                bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+                bot->GetPlayerbotAI()->FollowAutoReset();
                 bot->GetPlayerbotAI()->TurnInQuests(pNpc);
             }
 
@@ -673,7 +711,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                 for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
                 {
                     Player* const bot = it->second;
-                    bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+                    bot->GetPlayerbotAI()->FollowAutoReset();
                     if (bot->GetQuestStatus(quest) == QUEST_STATUS_COMPLETE)
                         bot->GetPlayerbotAI()->TellMaster("I already completed that quest.");
                     else if (!bot->CanTakeQuest(qInfo, false))
@@ -751,7 +789,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
             for (PlayerBotMap::const_iterator it = GetPlayerBotsBegin(); it != GetPlayerBotsEnd(); ++it)
             {
                 Player* const bot = it->second;
-                bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+                bot->GetPlayerbotAI()->FollowAutoReset();
                 bot->GetPlayerbotAI()->TurnInQuests(pNpc);
             }
             return;
@@ -844,7 +882,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                 Player* const bot = it->second;
                 if (!bot)
                     continue;
-                bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+                bot->GetPlayerbotAI()->FollowAutoReset();
                 Creature *pCreature = bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_NONE);
                 if (!pCreature)
                 {
@@ -948,7 +986,7 @@ void PlayerbotMgr::HandleMasterIncomingPacket(const WorldPacket& packet)
                 else
                 {
                     // changed the SellGarbage() function to support ch.SendSysMessaage()
-                    bot->GetPlayerbotAI()->FollowAutoReset(*bot);
+                    bot->GetPlayerbotAI()->FollowAutoReset();
                     bot->GetPlayerbotAI()->SellGarbage(*bot);
                 }
             }
@@ -1424,7 +1462,7 @@ bool ChatHandler::HandlePlayerbotCommand(char* args)
                 return false;
             }
             CharacterDatabase.DirectPExecute("UPDATE characters SET online = 1 WHERE guid = '%u'", guid.GetCounter());
-            mgr->AddPlayerBot(guid);
+            mgr->LoginPlayerBot(guid);
             PSendSysMessage("Bot added successfully.");
         }
         else if (cmdStr == "remove" || cmdStr == "logout")
@@ -1439,55 +1477,6 @@ bool ChatHandler::HandlePlayerbotCommand(char* args)
             mgr->LogoutPlayerBot(guid);
             PSendSysMessage("Bot removed successfully.");
         }
-        else if (cmdStr == "co" || cmdStr == "combatorder")
-        {
-            Unit *target = NULL;
-            char *orderChar = strtok(NULL, " ");
-            if (!orderChar)
-            {
-                PSendSysMessage("|cffff0000Syntax error:|cffffffff .bot co <botName> <order=reset|tank|assist|heal|protect> [targetPlayer]");
-                SetSentErrorMessage(true);
-                return false;
-            }
-            std::string orderStr = orderChar;
-            if (orderStr == "protect" || orderStr == "assist")
-            {
-                char *targetChar = strtok(NULL, " ");
-                ObjectGuid targetGUID = m_session->GetPlayer()->GetSelectionGuid();
-                if (!targetChar && !targetGUID)
-                {
-                    PSendSysMessage("|cffff0000Combat orders protect and assist expect a target either by selection or by giving target player in command string!");
-                    SetSentErrorMessage(true);
-                    return false;
-                }
-                if (targetChar)
-                {
-                    std::string targetStr = targetChar;
-                    ObjectGuid targ_guid = sAccountMgr.GetPlayerGuidByName(targetStr.c_str());
 
-                    targetGUID.Set(targ_guid.GetRawValue());
-                }
-                target = ObjectAccessor::GetUnit(*m_session->GetPlayer(), targetGUID);
-                if (!target)
-                {
-                    PSendSysMessage("|cffff0000Invalid target for combat order protect or assist!");
-                    SetSentErrorMessage(true);
-                    return false;
-                }
-            }
-            if (mgr->GetPlayerBot(guid) == NULL)
-            {
-                PSendSysMessage("|cffff0000Bot can not receive combat order because bot does not exist in world.");
-                SetSentErrorMessage(true);
-                return false;
-            }
-            QueryResult *resultlvl = CharacterDatabase.PQuery("SELECT guid FROM playerbot_saved_data WHERE guid = '%u'", guid.GetCounter());
-            if (!resultlvl)
-                CharacterDatabase.DirectPExecute("INSERT INTO playerbot_saved_data (guid,bot_primary_order,bot_secondary_order,primary_target,secondary_target,pname,sname) VALUES ('%u',0,0,0,0,'','')", guid.GetCounter());
-            else
-                delete resultlvl;
-
-            mgr->GetPlayerBot(guid)->GetPlayerbotAI()->SetCombatOrderByStr(orderStr, target);
-        }
         return true;
 }
