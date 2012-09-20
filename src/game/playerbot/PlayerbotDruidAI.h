@@ -106,7 +106,12 @@ enum DruidSpells
     TREE_OF_LIFE_1                  = 33891,
     TYPHOON_1                       = 50516,
     WILD_GROWTH_1                   = 48438,
-    WRATH_1                         = 5176
+    WRATH_1                         = 5176,
+    ECLIPSE_1                       = 48525,
+
+    //Procs
+    ECLIPSE_SOLAR_1                 = 48517,
+    ECLIPSE_LUNAR_1                 = 48518
 };
 
 //class Player;
@@ -118,8 +123,8 @@ public:
     virtual ~PlayerbotDruidAI();
 
     // all combat actions go here
-    bool DoFirstCombatManeuver(Unit*);
-    void DoNextCombatManeuver(Unit*);
+    CombatManeuverReturns DoFirstCombatManeuver(Unit*);
+    CombatManeuverReturns DoNextCombatManeuver(Unit*);
 
     // all non combat actions go here, ex buffs, heals, rezzes
     void DoNonCombatActions();
@@ -128,18 +133,32 @@ public:
     bool BuffPlayer(Player *target);
 
 private:
+    CombatManeuverReturns CastSpell(uint32 nextAction, Unit *pTarget = NULL) { return CastSpellNoRanged(nextAction, pTarget); }
+
     // Combat Maneuver helper functions
-    void _DoNextPVECombatManeuverBear(Unit* pTarget);
-    void _DoNextPVECombatManeuverSpellDPS(Unit* pTarget);
-    void _DoNextPVECombatManeuverMeleeDPS(Unit* pTarget);
-    void _DoNextPVECombatManeuverHeal(Unit* pTarget);
+    CombatManeuverReturns _DoNextPVECombatManeuverBear(Unit* pTarget);
+    CombatManeuverReturns _DoNextPVECombatManeuverCat(Unit* pTarget);
+    CombatManeuverReturns _DoNextPVECombatManeuverSpellDPS(Unit* pTarget);
+    CombatManeuverReturns _DoNextPVECombatManeuverHeal(Unit* pTarget);
 
     // Heals the target based off its hps
-    bool HealTarget (Unit *target);
+    CombatManeuverReturns HealTarget (Unit *target);
+    Unit* GetHealTarget() { return PlayerbotClassAI::GetHealTarget(); }
+
     // Callback method to reset shapeshift forms blocking buffs and heals
     static void GoBuffForm(Player *self);
     // Has the ability to change to animal form
     bool IsFeral();
+
+    //Assumes form based on spec
+    uint8 CheckForms();
+    enum CheckForms_ReturnValues {
+        RETURN_FAIL = 0,
+        RETURN_FAIL_WAITINGONSELFBUFF,
+        RETURN_OK_NOCHANGE,
+        RETURN_OK_SHIFTING,
+        RETURN_OK_CANNOTSHIFT
+    };
 
     // druid cat/bear/dire bear/moonkin/tree of life forms
     uint32 CAT_FORM,
@@ -157,7 +176,9 @@ private:
            RIP,
            FEROCIOUS_BITE,
            MAIM,
-           MANGLE;
+           MANGLE,
+           MANGLE_CAT,
+           SAVAGE_ROAR;
 
     // druid bear/dire bear attacks & buffs
     uint32 BASH,
@@ -167,7 +188,9 @@ private:
            CHALLENGING_ROAR,
            GROWL,
            ENRAGE,
-           FAERIE_FIRE_FERAL;
+           FAERIE_FIRE_FERAL,
+           MANGLE_BEAR,
+           LACERATE;
 
     // druid caster DPS attacks & debuffs
     uint32 MOONFIRE,
@@ -178,7 +201,10 @@ private:
            INSECT_SWARM,
            FAERIE_FIRE,
            FORCE_OF_NATURE,
-           HURRICANE;
+           HURRICANE,
+           ECLIPSE_SOLAR,
+           ECLIPSE_LUNAR,
+           ECLIPSE;
 
     // druid buffs
     uint32 MARK_OF_THE_WILD,
