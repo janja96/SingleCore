@@ -196,7 +196,7 @@ Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
     // Sorts according to type: Healers first, tanks next, then master followed by DPS, thanks to the order of the TYPE enum
     std::sort(targets.begin(), targets.end());
 
-    uint8 uCount = 0;
+    int16 uCount = 0;
     // x is used as 'target found' variable; i is used as the targets iterator throughout all 4 types.
     int16 x = -1, i = 0;
 
@@ -204,7 +204,7 @@ Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
     while (true)
     {
         // This works because we sorted it above
-        if ( (uCount + i) >= targets.size() || targets.at(uCount).type != JOB_HEAL) break;
+        if ( (uCount + i) >= (int16)targets.size() || targets.at(uCount).type != JOB_HEAL) break;
         uCount++;
     }
 
@@ -220,7 +220,7 @@ Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
     // Try to find a tank in need of healing (if multiple, the lowest health one)
     while (true)
     {
-        if ( (uCount + i) >= targets.size() || targets.at(uCount).type != JOB_TANK) break;
+        if ( (uCount + i) >= (int16)targets.size() || targets.at(uCount).type != JOB_TANK) break;
         uCount++;
     }
 
@@ -237,7 +237,7 @@ Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
     {
         while (true)
         {
-            if ( (uCount + i) >= targets.size() || targets.at(uCount).type != JOB_MASTER) break;
+            if ( (uCount + i) >= (int16)targets.size() || targets.at(uCount).type != JOB_MASTER) break;
             uCount++;
         }
 
@@ -253,7 +253,7 @@ Player* PlayerbotClassAI::GetHealTarget(JOB_TYPE type)
     // Try to find anyone else in need of healing (lowest health one first)
     while (true)
     {
-        if ( (uCount + i) >= targets.size() ) break;
+        if ( (uCount + i) >= (int16)targets.size() ) break;
         uCount++;
     }
 
